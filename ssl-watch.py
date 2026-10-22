@@ -7,7 +7,8 @@ Runs ssl-check.py for each domain, writes a short human report plus a JSON summa
     C:/Users/Moddy/motionstoodio-site/ssl-status.json
 
 Designed to be run by Windows Task Scheduler with pythonw.exe (no console window).
-Exit code is 0 when every site passes, 1 when anything needs attention.
+Exit code is 0 when every site passes and no certificate is close to expiry, 1 when
+anything needs attention — a failed check or a renewal that is nearly due.
 """
 import datetime
 import json
@@ -63,9 +64,9 @@ def post_discord(token, channel, content):
         return f"{type(e).__name__}: {e}"
 
 
-def discord_message(summary, ok_all):
+def discord_message(summary, attention):
     head = "SSL watch — " + datetime.date.today().isoformat()
-    icon = "🔐" if ok_all else "⚠️"
+    icon = "⚠️" if attention else "🔐"
     rows = [f"{icon} **{head}**"]
     for domain, s in summary["sites"].items():
         mark = "✓" if s["ok"] else "✗"
@@ -75,7 +76,7 @@ def discord_message(summary, ok_all):
             rows.append("  ↳ certificate renewal due soon — check the IONOS panel")
         for b in s.get("blocking", []):
             rows.append(f"  ↳ {b}")
-    rows.append("ALL GREEN" if ok_all else "NEEDS ATTENTION")
+    rows.append("ALL GREEN" if not attention else "NEEDS ATTENTION")
     return "\n".join(rows)
 
 
@@ -152,26 +153,27 @@ def main():
             lines.append(f"  {b}")
         lines.append("")
 
-    lines.append("ALL GREEN" if ok_all else "NEEDS ATTENTION")
-
-    # Notify Discord when something needs a human (never a daily green ping unless asked).
     renewal_due = any(
         s["days_left"] is not None and s["days_left"] < 21 for s in summary["sites"].values()
     )
+    attention = (not ok_all) or renewal_due
+    lines.append("NEEDS ATTENTION" if attention else "ALL GREEN")
+
+    # Notify Discord when something needs a human (never a daily green ping unless asked).
     wants = {"--test", "--always"} & set(sys.argv[1:])
-    if wants or not ok_all or renewal_due:
+    if wants or attention:
         token, channel = discord_targets()
         if not token or not channel:
             lines.append("discord: skipped (DISCORD_BOT_TOKEN / DISCORD_HOME_CHANNEL missing)")
         else:
-            sent = post_discord(token, channel, discord_message(summary, ok_all))
+            sent = post_discord(token, channel, discord_message(summary, attention))
             lines.append(f"discord: message {sent}")
 
     report = "\n".join(lines) + "\n"
     OUT_TXT.write_text(report, encoding="utf-8")
     OUT_JSON.write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(report)
-    return 0 if ok_all else 1
+    return 0 if not attention else 1
 
 
 if __name__ == "__main__":
