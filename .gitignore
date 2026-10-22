@@ -1,0 +1,11 @@
+# local deploy machinery — not part of the published site
+.htaccess
+.htaccess-https
+.htaccess.bak
+deploy.py
+enable-https.py
+ssl-check.py
+DEPLOY.md
+.ftp-credentials
+__pycache__/
+*.pyc

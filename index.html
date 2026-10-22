@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>motionstoodio — window animations for Windows 11</title>
+<meta name="description" content="A Windows 11 app that gives windows weight: spring drags, 39 minimize and restore effects, menus that don't snap. 1.0.0 is in beta.">
+<meta name="theme-color" content="#071110">
+<link rel="canonical" href="https://motionstoodio.com/">
+<link rel="icon" href="assets/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icon-256.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="motionstoodio — window animations for Windows 11">
+<meta property="og:description" content="Spring drags, 39 minimize and restore effects, transitions instead of flashes. Coming soon.">
+<meta property="og:url" content="https://motionstoodio.com/">
+<meta property="og:image" content="https://motionstoodio.com/assets/icon-256.png">
+<link rel="preload" href="fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:Archivo;src:url(fonts/archivo-var.woff2) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url(fonts/plex-mono-400.woff2) format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url(fonts/plex-mono-500.woff2) format('woff2');font-weight:500;font-style:normal;font-display:swap}
+
+:root{
+  color-scheme:dark;
+  --bg:#071110;
+  --panel:rgba(233,246,242,.045);
+  --panel-raise:rgba(233,246,242,.075);
+  --line:rgba(233,246,242,.12);
+  --line-soft:rgba(233,246,242,.06);
+  --ink:#ECF6F2;
+  --ink-2:#B9CFC8;
+  --ink-3:#7F9C93;
+  --teal:#2FD3C2;
+  --teal-deep:#1FB9AA;
+  --pink:#F82888;
+  --sans:Archivo,'Segoe UI',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
+  --radius:14px;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(820px 520px at 82% -8%, rgba(47,211,194,.085), transparent 62%),
+    radial-gradient(620px 460px at 2% 2%, rgba(248,40,136,.045), transparent 58%);
+  background-repeat:no-repeat;
+}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:-9999px;top:0;background:#0C1A18;color:var(--ink);padding:12px 16px;z-index:10}
+.skip:focus{left:16px;top:16px}
+
+.wrap{max-width:1240px;margin:0 auto;padding:0 34px}
+
+/* ---------- strip ---------- */
+.strip{
+  border-bottom:1px solid var(--line-soft);
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+  padding:16px 0;
+}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand img{width:26px;height:26px;display:block;border-radius:7px}
+.brand span{font-weight:600;font-size:15.5px;letter-spacing:-.012em}
+.strip-right{display:flex;align-items:center;gap:22px}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:6px 11px 5px;
+}
+.pill i{width:6px;height:6px;border-radius:50%;background:var(--pink);box-shadow:0 0 10px rgba(248,40,136,.7)}
+.ext{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);text-decoration:none;border-bottom:1px solid transparent;padding-bottom:2px;
+  transition:color .12s ease,border-color .12s ease;
+}
+.ext:hover{color:var(--ink);border-color:var(--line)}
+
+/* ---------- mast ---------- */
+.mast{
+  display:grid;grid-template-columns:1.06fr .94fr;gap:66px;
+  padding:78px 0 68px;align-items:start;
+}
+.overline{
+  font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 22px;
+}
+h1{
+  font-size:clamp(40px,5.6vw,74px);
+  line-height:.95;
+  letter-spacing:-.038em;
+  font-weight:600;
+  margin:0 0 26px;
+  max-width:15ch;
+  text-wrap:balance;
+}
+.lede{
+  font-size:17.5px;line-height:1.62;color:var(--ink-2);margin:0 0 30px;max-width:50ch;
+}
+.status{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin:0;padding-top:20px;border-top:1px solid var(--line-soft);max-width:52ch;
+}
+.badge{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--teal);border:1px solid rgba(47,211,194,.32);border-radius:999px;
+  padding:5px 10px 4px;white-space:nowrap;
+}
+.note{font-size:14px;line-height:1.5;color:var(--ink-3);margin:0}
+
+/* ---------- demo ---------- */
+.demo{min-width:0}
+.stage{
+  position:relative;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel);
+  height:360px;
+  overflow:hidden;
+  touch-action:none;
+  display:grid;place-items:center;
+  background-image:
+    linear-gradient(to right, rgba(233,246,242,.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(233,246,242,.035) 1px, transparent 1px);
+  background-size:44px 44px;
+  background-position:center center;
+}
+.stage::after{
+  content:"drag the window";
+  position:absolute;left:16px;bottom:12px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+}
+.win{
+  width:min(70%,320px);
+  border-radius:10px;
+  background:#0C1A18;
+  border:1px solid rgba(233,246,242,.15);
+  box-shadow:0 26px 60px -28px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);
+  cursor:grab;
+  will-change:transform;
+  transform:translate3d(0,0,0);
+  user-select:none;
+  -webkit-user-select:none;
+}
+.win.grabbing{cursor:grabbing}
+.tbar{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 12px;border-bottom:1px solid rgba(233,246,242,.08);
+}
+.tbar span{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+}
+.dots{display:flex;gap:5px}
+.dots i{width:7px;height:7px;border-radius:50%;background:rgba(233,246,242,.16)}
+.dots i:last-child{background:rgba(248,40,136,.55)}
+.wbody{padding:30px 12px 34px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.wbody img{width:66px;height:66px;display:block;border-radius:14px}
+
+.demobar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;flex-wrap:wrap}
+.btn{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--teal);background:transparent;border:1px solid rgba(47,211,194,.35);
+  border-radius:999px;padding:9px 15px 8px;cursor:pointer;
+  transition:background .12s ease,border-color .12s ease,color .12s ease;
+  min-height:34px;
+}
+.btn:hover{background:rgba(47,211,194,.08);border-color:rgba(47,211,194,.55)}
+.btn[disabled]{color:var(--ink-3);border-color:var(--line);cursor:default;background:transparent}
+.mono{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+
+/* ---------- rows ---------- */
+section{min-width:0}
+.head{
+  display:flex;align-items:baseline;gap:18px;padding-bottom:14px;border-bottom:1px solid var(--line);
+}
+.head h2{
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-2);margin:0;
+}
+.head .rule{flex:1;height:1px;background:var(--line-soft)}
+dl{margin:0}
+.row{
+  display:grid;grid-template-columns:172px 1fr;gap:26px;
+  padding:24px 0;border-bottom:1px solid var(--line-soft);
+}
+.row dt{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--teal);padding-top:2px;
+}
+.row dd{margin:0;font-size:16px;line-height:1.6;color:var(--ink);max-width:70ch}
+.row dd .sub{display:block;margin-top:6px;font-size:14.5px;color:var(--ink-3);line-height:1.55}
+
+/* ---------- quiet ---------- */
+.quiet{margin:74px 0 0;padding:38px 40px 40px;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--panel)}
+.quiet .overline{margin-bottom:16px}
+.big{font-size:clamp(22px,2.6vw,31px);line-height:1.22;letter-spacing:-.022em;font-weight:500;margin:0 0 18px;max-width:22ch}
+.fine{font-size:14.5px;line-height:1.68;color:var(--ink-3);margin:0;max-width:74ch}
+
+/* ---------- foot ---------- */
+footer{
+  margin-top:78px;border-top:1px solid var(--line-soft);
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  padding:26px 0 44px;
+}
+footer a{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--line-soft);padding-bottom:1px}
+footer a:hover{color:var(--ink)}
+.foot-r{display:flex;align-items:center;gap:20px}
+
+@media (max-width:980px){
+  .mast{grid-template-columns:1fr;gap:44px;padding:56px 0 60px}
+  h1{max-width:18ch}
+  .stage{height:320px}
+  .row{grid-template-columns:1fr;gap:8px}
+  .row dt{padding-top:0}
+}
+@media (max-width:620px){
+  .wrap{padding:0 20px}
+  .strip{padding:14px 0}
+  .strip-right{gap:14px}
+  .ext{display:none}
+  h1{font-size:clamp(34px,10vw,44px)}
+  .lede{font-size:16px}
+  .stage{height:290px}
+  .win{width:min(80%,320px)}
+  .quiet{padding:28px 22px 30px;margin-top:56px}
+  footer{margin-top:56px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="wrap">
+  <header class="strip">
+    <a class="brand" href="/">
+      <img src="assets/icon-256.png" alt="" width="26" height="26">
+      <span>motionstoodio</span>
+    </a>
+    <div class="strip-right">
+      <span class="pill"><i aria-hidden="true"></i>coming soon</span>
+      <a class="ext" href="https://moddys.net">more from moddys&nbsp;↗</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="mast">
+      <div class="mast-copy">
+        <p class="overline">Window animations &middot; Windows 11 x64</p>
+        <h1>Windows that move like they weigh something.</h1>
+        <p class="lede">Drag a window and it follows your hand on a spring. Minimize it and it melts, rolls or burns away. Open an app and it arrives with a transition instead of a flash.</p>
+        <p class="status">
+          <span class="badge">1.0.0 beta</span>
+          <span class="note">Installs under your own profile — no admin rights. The download lands here when it's ready.</span>
+        </p>
+      </div>
+
+      <div class="demo">
+        <div class="stage" id="stage">
+          <div class="win" id="win">
+            <div class="tbar"><span>file explorer</span><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="wbody">
+              <img src="assets/icon-256.png" alt="" width="66" height="66">
+            </div>
+          </div>
+        </div>
+        <div class="demobar">
+          <button class="btn" id="nudge" type="button">Nudge it</button>
+          <span class="mono" id="readout">spring 4.33 &middot; friction 2.05 &middot; mass 8</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="what">
+      <div class="head"><h2 id="what">What it does</h2><span class="rule" aria-hidden="true"></span></div>
+      <dl>
+        <div class="row">
+          <dt>drag</dt>
+          <dd>The window trails your cursor on a spring mesh and settles back when you let go.
+            <span class="sub">Spring, friction and weight are yours to tune. Release it and it comes home.</span></dd>
+        </div>
+        <div class="row">
+          <dt>39 effects</dt>
+          <dd>Minimize and restore animations, from fade and shrink to fire and burn away — including two of ours, Cinder Break and Ashfall.
+            <span class="sub">Each has its own speed, end size and end fade, and the whole set is one dropdown.</span></dd>
+        </div>
+        <div class="row">
+          <dt>open / close</dt>
+          <dd>A window arrives with a transition instead of a flash, and leaves with one.
+            <span class="sub">Off by default: it is the only part that loads into other apps, so it stays your call.</span></dd>
+        </div>
+        <div class="row">
+          <dt>menus</dt>
+          <dd>Pop-up menus fade in with a short upward slide, and slide back down as they close.</dd>
+        </div>
+        <div class="row">
+          <dt>dudes</dt>
+          <dd>A small character perches on the edge of the taskbar, wanders, blinks, and reacts to your windows.
+            <span class="sub">18 packs ship with it, up to four on screen, and one switch turns the lot off.</span></dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="quiet" aria-labelledby="priv">
+      <p class="overline" id="priv">What it doesn't do</p>
+      <p class="big">No telemetry. No accounts. No background connections.</p>
+      <p class="fine">motionstoodio does not phone home. The one request it can make is a version check, and only when you press <em>Check for updates</em> — it fetches a small manifest and sends nothing about you or your machine. Window titles are never written to logs: the recovery journal records a handle, a class name and a process id, which is enough to put a window back and not enough to learn what was in it.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span class="mono">motionstoodio &middot; 2026</span>
+    <div class="foot-r">
+      <a href="https://moddys.net">moddys.net</a>
+      <span class="mono">Windows 11 &middot; MIT</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var stage = document.getElementById('stage');
+  var win = document.getElementById('win');
+  var btn = document.getElementById('nudge');
+  var out = document.getElementById('readout');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var x = 0, y = 0, vx = 0, vy = 0, tx = 0, ty = 0, raf = 0, live = false;
+  var K = 0.16, D = 0.82, MAX = 84;
+
+  function paint(){
+    var rot = Math.max(-7, Math.min(7, vx * 1.6));
+    var sx = 1 + Math.min(0.05, Math.abs(vx) * 0.004);
+    win.style.transform = 'translate3d(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px,0) rotate(' + rot.toFixed(2) + 'deg) scaleX(' + sx.toFixed(3) + ')';
+  }
+  function frame(){
+    vx = (vx + (tx - x) * K) * D;
+    vy = (vy + (ty - y) * K) * D;
+    x += vx; y += vy;
+    paint();
+    if (Math.abs(vx) < 0.06 && Math.abs(vy) < 0.06 && Math.abs(tx - x) < 0.06 && Math.abs(ty - y) < 0.06){
+      x = tx; y = ty; vx = vy = 0; paint(); live = false; raf = 0; return;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  function run(){ if (!live){ live = true; raf = requestAnimationFrame(frame); } }
+
+  var RM = reduce.matches;
+  if (RM){
+    btn.disabled = true;
+    btn.textContent = 'Spring off';
+    out.textContent = 'reduced motion · direct drag, no spring';
+  }
+
+  var dragging = false, ox = 0, oy = 0;
+  win.addEventListener('pointerdown', function(e){
+    dragging = true; win.classList.add('grabbing');
+    ox = e.clientX - x; oy = e.clientY - y;
+    try { win.setPointerCapture(e.pointerId); } catch(err) {}
+    e.preventDefault();
+  });
+  win.addEventListener('pointermove', function(e){
+    if (!dragging) return;
+    tx = Math.max(-MAX, Math.min(MAX, e.clientX - ox));
+    ty = Math.max(-MAX * 0.72, Math.min(MAX * 0.72, e.clientY - oy));
+    if (RM){ x = tx; y = ty; paint(); } else { run(); }
+  });
+  function release(){
+    if (!dragging) return;
+    dragging = false; win.classList.remove('grabbing');
+    if (RM){ x = 0; y = 0; tx = 0; ty = 0; paint(); return; }
+    tx = 0; ty = 0; run();
+  }
+  win.addEventListener('pointerup', release);
+  win.addEventListener('pointercancel', release);
+  win.addEventListener('lostpointercapture', release);
+
+  if (!RM){
+    btn.addEventListener('click', function(){
+      vx = 7.4; vy = -5.2; tx = 0; ty = 0; run();
+    });
+  }
+})();
+</script>
+</body>
+</html>
