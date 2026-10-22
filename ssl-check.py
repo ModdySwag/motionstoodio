@@ -149,7 +149,8 @@ try:
     s2, b2, _, final2 = fetch(f"https://{WWW}/?cb=sslcheck")
     www_status = s2
     check("www serves (redirect or page)",
-          s2 in (200, 301, 302) and final2.startswith("https://"), f"{s2} {final2}")
+          s2 in (200, 301, 302) and final2.startswith("https://")
+          and MARKER in b2.decode("utf-8", "replace"), f"{s2} {final2}")
 except Exception as e:
     check("www serves (redirect or page)", False, f"{type(e).__name__}: {e}")
 
