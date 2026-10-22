@@ -4,8 +4,11 @@
 .htaccess.bak
 deploy.py
 enable-https.py
-ssl-check.py
 DEPLOY.md
 .ftp-credentials
 __pycache__/
 *.pyc
+
+# output of the daily SSL watch — generated locally, rewritten every run
+ssl-status.txt
+ssl-status.json

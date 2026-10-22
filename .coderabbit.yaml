@@ -1,0 +1,87 @@
+# CodeRabbit configuration — motionstoodio.com
+# Docs: https://docs.coderabbit.ai/reference/configuration
+# Schema: https://www.coderabbit.ai/integrations/schema.v2.json
+#
+# This repo is deliberately tiny: one static page, a deploy script and two
+# SSL checkers. The config below keeps reviews on the code that matters and
+# out of the fonts, icons and generated status files.
+
+language: en-AU
+
+reviews:
+  # "assertive" suits an audit pass; drop to "chill" once the code is stable.
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  poem: false
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches: []
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "[skip review]"
+
+  path_filters:
+    - "!fonts/**"
+    - "!assets/**"
+    - "!**/*.woff2"
+    - "!**/*.png"
+    - "!__pycache__/**"
+    - "!ssl-status.txt"
+    - "!ssl-status.json"
+
+  path_instructions:
+    - path: "index.html"
+      instructions: >-
+        Single static coming-soon page: no build step, no framework and no
+        third-party requests. Flag anything that adds an external font, script,
+        analytics or tracker; the privacy claim on the page depends on it.
+        Keep the one-file structure, the inline reduced-motion path working
+        (both CSS and the JS pointer handlers) and the page usable by keyboard
+        and screen readers. Metadata changes should stay consistent between
+        <title>, meta description, og:* and the visible copy.
+    - path: "ssl-check.py"
+      instructions: >-
+        Python 3 standard library only. Never print a credential or a token.
+        Every check must be able to fail: flag assertions that are hardcoded
+        True or that pass on any input. The script is parsed by ssl-watch.py,
+        so keep the output contract intact: a line starting "VERDICT:", lines
+        starting "blocking:", and an "INFO  issuer:" line. Exit non-zero when
+        any check fails.
+    - path: "ssl-watch.py"
+      instructions: >-
+        Python 3 standard library only, designed to run under pythonw.exe with
+        no console. Never print the Discord token or the .env contents. Treat a
+        parse failure (no certificate date found) as a failure, not as a green
+        result. It is scheduled by Windows Task Scheduler, so it must always
+        exit with a meaningful code and never raise out of main().
+    - path: "deploy.py"
+      instructions: >-
+        Reads SFTP credentials from a file outside the repository; never commit
+        credentials or print them. Flag any host-key policy that accepts an
+        unknown server key, and any path that writes outside the intended
+        remote directory.
+
+  tools:
+    ruff:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
