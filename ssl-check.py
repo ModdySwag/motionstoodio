@@ -43,10 +43,11 @@ def doh(name, rtype):
 
 
 def fetch(url, timeout=20, follow=True):
+    """Return (status, body, headers, final_url) — final_url is where the chain ended."""
     req = urllib.request.Request(url, headers={"User-Agent": "motionstoodio-ssl-check"})
     if follow:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.headers)
+            return r.status, r.read(), dict(r.headers), r.geturl()
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
@@ -55,9 +56,9 @@ def fetch(url, timeout=20, follow=True):
     opener = urllib.request.build_opener(NoRedirect)
     try:
         with opener.open(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.headers)
+            return r.status, r.read(), dict(r.headers), r.geturl()
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), dict(e.headers)
+        return e.code, e.read(), dict(e.headers), getattr(e, "url", url)
 
 
 def header(headers, name):
@@ -88,7 +89,7 @@ for label, name in dns_checks:
 
 print("\nHTTP")
 try:
-    status, body, headers = fetch(f"http://{DOMAIN}/?cb=sslcheck", follow=False)
+    status, body, headers, _ = fetch(f"http://{DOMAIN}/?cb=sslcheck", follow=False)
     text = body.decode("utf-8", "replace")
     ours = MARKER in text or ("motionstoodio" in text and "Diese Domain" not in text)
     loc = header(headers, "Location") or ""
@@ -134,8 +135,9 @@ except Exception as e:
 
 print("\nHTTPS")
 try:
-    status, body, headers = fetch(f"https://{DOMAIN}/?cb=sslcheck")
+    status, body, headers, final = fetch(f"https://{DOMAIN}/?cb=sslcheck")
     check("https 200", status == 200, str(status))
+    check("https stays encrypted", final.startswith("https://"), final)
     check("serves the page", MARKER in body.decode("utf-8", "replace"), f"marker {MARKER!r}")
     hsts = header(headers, "Strict-Transport-Security")
     print(f"  INFO  HSTS{' set: ' + hsts if hsts else ' not sent'}")
@@ -144,9 +146,10 @@ except Exception as e:
 
 www_status = None
 try:
-    s2, b2, _ = fetch(f"https://{WWW}/?cb=sslcheck")
+    s2, b2, _, final2 = fetch(f"https://{WWW}/?cb=sslcheck")
     www_status = s2
-    check("www serves (redirect or page)", s2 in (200, 301, 302), str(s2))
+    check("www serves (redirect or page)",
+          s2 in (200, 301, 302) and final2.startswith("https://"), f"{s2} {final2}")
 except Exception as e:
     check("www serves (redirect or page)", False, f"{type(e).__name__}: {e}")
 
