@@ -12,3 +12,6 @@ __pycache__/
 # output of the daily SSL watch — generated locally, rewritten every run
 ssl-status.txt
 ssl-status.json
+
+# agent tooling installed per machine (`greptile skills install`), regenerable
+.agents/
