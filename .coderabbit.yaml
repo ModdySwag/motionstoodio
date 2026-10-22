@@ -44,6 +44,11 @@ reviews:
     - "!ssl-status.txt"
     - "!ssl-status.json"
 
+  pre_merge_checks:
+    # Personal scripts, not a shared library: the docstring nag is noise here.
+    docstrings:
+      mode: off
+
   path_instructions:
     - path: "index.html"
       instructions: >-
