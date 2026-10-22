@@ -79,9 +79,23 @@ def discord_message(summary, ok_all):
     return "\n".join(rows)
 
 
-def parse_expiry(text):
-    m = re.search(r"not expired\s+until (.+?) GMT", text)
-    return m.group(1).strip() if m else None
+def cert_expiries(text):
+    """Every certificate date the checker printed — apex and www — de-duplicated."""
+    found = []
+    for m in re.findall(r"until (.+?) GMT", text):
+        when = m.strip()
+        if when not in found:
+            found.append(when)
+    return found
+
+
+def days_left(expiry):
+    try:
+        when = datetime.datetime.strptime(expiry, "%b %d %H:%M:%S %Y").replace(
+            tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+    return (when - datetime.datetime.now(datetime.timezone.utc)).days
 
 
 def main():
@@ -106,15 +120,10 @@ def main():
             proc = None
 
         ok_all = ok_all and ok
-        expiry = parse_expiry(text)
-        days = None
-        if expiry:
-            try:
-                when = datetime.datetime.strptime(expiry, "%b %d %H:%M:%S %Y").replace(
-                    tzinfo=datetime.timezone.utc)
-                days = (when - datetime.datetime.now(datetime.timezone.utc)).days
-            except ValueError:
-                pass
+        dated = [(e, days_left(e)) for e in cert_expiries(text)]
+        dated = [(e, d) for e, d in dated if d is not None]
+        days = min((d for _, d in dated), default=None)
+        expiry = min(dated, key=lambda pair: pair[1])[0] if dated else None
         issuer = None
         m = re.search(r"INFO  issuer: (.+)", text)
         if m:
@@ -125,6 +134,7 @@ def main():
             "verdict": verdict.replace("VERDICT: ", ""),
             "expires": expiry,
             "days_left": days,
+            "certificates": [{"until": e, "days_left": d} for e, d in dated],
             "issuer": issuer,
             "blocking": blocking,
         }
@@ -132,11 +142,10 @@ def main():
         flag = "" if ok else "    <-- ATTENTION"
         lines.append(f"{domain}")
         lines.append(f"  {verdict}{flag}")
-        if expiry:
-            left = f" ({days} days left)" if days is not None else ""
-            lines.append(f"  certificate until {expiry} GMT{left}")
-            if days is not None and days < 21:
-                lines.append("  RENEWAL DUE SOON — IONOS should renew automatically; check the panel")
+        for when_s, left_days in dated:
+            lines.append(f"  certificate until {when_s} GMT ({left_days} days left)")
+        if days is not None and days < 21:
+            lines.append("  RENEWAL DUE SOON — IONOS should renew automatically; check the panel")
         if issuer:
             lines.append(f"  issuer {issuer}")
         for b in blocking:
