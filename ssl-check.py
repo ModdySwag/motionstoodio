@@ -60,6 +60,22 @@ def fetch(url, timeout=20, follow=True):
         return e.code, e.read(), dict(e.headers)
 
 
+def header(headers, name):
+    """Case-insensitive lookup — servers are free to send Location / HSTS in any case."""
+    for k, v in headers.items():
+        if k.lower() == name.lower():
+            return v
+    return None
+
+
+def peer_cert(host):
+    """The certificate that host actually presents, verified by the default context."""
+    ctx = ssl.create_default_context()
+    with socket.create_connection((host, 443), timeout=15) as s:
+        with ctx.wrap_socket(s, server_hostname=host) as ss:
+            return ss.getpeercert()
+
+
 print(f"\nSSL check — {DOMAIN}\n")
 print("DNS")
 apex = doh(DOMAIN, "A")
@@ -72,9 +88,9 @@ try:
     status, body, headers = fetch(f"http://{DOMAIN}/?cb=sslcheck", follow=False)
     text = body.decode("utf-8", "replace")
     ours = MARKER in text or ("motionstoodio" in text and "Diese Domain" not in text)
-    loc = headers.get("Location", "")
-    check("http answers", status in (200, 301, 302), str(status))
-    check("redirects to https", status in (301, 302) and loc.startswith("https://"),
+    loc = header(headers, "Location") or ""
+    check("http answers", status in (200, 301, 302, 307, 308), str(status))
+    check("redirects to https", status in (301, 302, 307, 308) and loc.startswith("https://"),
           loc or "no redirect")
     if status == 200:
         check("serves the page", ours,
@@ -97,19 +113,27 @@ try:
     org = issuer.get("organizationName", "")
     print(f"  INFO  issuer: {org} / {issuer.get('commonName')}")
     check("covers apex", DOMAIN in sans or subj.get("commonName") == DOMAIN, ", ".join(sans[:6]))
-    check("covers www", WWW in sans or f"*.{DOMAIN}" in sans, "wildcard" if f"*.{DOMAIN}" in sans else "")
     check("not expired", ssl.cert_time_to_seconds(cert["notAfter"]) > __import__("time").time(),
           f"until {cert['notAfter']}")
     check("browser-trusted chain", True, "verified by default context")
 except Exception as e:
     check("handshake", False, f"{type(e).__name__}: {e}")
 
+try:
+    www_cert = peer_cert(WWW)
+    www_sans = [v for k, v in www_cert.get("subjectAltName", [])]
+    wildcard = f"*.{DOMAIN}" in www_sans
+    check("www host certificate", WWW in www_sans or wildcard,
+          "wildcard" if wildcard else ", ".join(www_sans[:4]))
+except Exception as e:
+    check("www host certificate", False, f"{type(e).__name__}: {e}")
+
 print("\nHTTPS")
 try:
     status, body, headers = fetch(f"https://{DOMAIN}/?cb=sslcheck")
     check("https 200", status == 200, str(status))
     check("serves the page", MARKER in body.decode("utf-8", "replace"), f"marker {MARKER!r}")
-    hsts = headers.get("Strict-Transport-Security")
+    hsts = header(headers, "Strict-Transport-Security")
     print(f"  INFO  HSTS{' set: ' + hsts if hsts else ' not sent'}")
 except Exception as e:
     check("https reachable", False, f"{type(e).__name__}: {e}")

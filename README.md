@@ -12,8 +12,9 @@ The product itself lives at [moddys.net](https://moddys.net).
 
 ## SSL watch
 
-`ssl-check.py` checks one domain live — DNS, the served page, the certificate, the HTTP→HTTPS
-redirect and HSTS — and exits non-zero if anything fails:
+`ssl-check.py` checks one domain live — DNS, the served page, the certificate and the HTTP→HTTPS
+redirect — and exits non-zero if any check fails. HSTS is reported as informational output, not
+enforced: a site can pass every check and still not send the header.
 
     python3 ssl-check.py motionstoodio.com
 
