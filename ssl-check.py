@@ -78,10 +78,13 @@ def peer_cert(host):
 
 print(f"\nSSL check — {DOMAIN}\n")
 print("DNS")
-apex = doh(DOMAIN, "A")
-www_a = doh(WWW, "A")
-check("apex A record", bool(apex), ", ".join(apex) or "none")
-check("www A/CNAME", bool(www_a), ", ".join(www_a) or "NXDOMAIN")
+dns_checks = (("apex A record", DOMAIN), ("www A/CNAME", WWW))
+for label, name in dns_checks:
+    try:
+        addrs = doh(name, "A")
+        check(label, bool(addrs), ", ".join(addrs) or "NXDOMAIN")
+    except Exception as e:  # a DNS hiccup must not hide the HTTP/TLS results
+        check(label, False, f"lookup failed: {type(e).__name__}: {e}")
 
 print("\nHTTP")
 try:
@@ -125,6 +128,7 @@ try:
     wildcard = f"*.{DOMAIN}" in www_sans
     check("www host certificate", WWW in www_sans or wildcard,
           "wildcard" if wildcard else ", ".join(www_sans[:4]))
+    print(f"  INFO  www certificate until {www_cert['notAfter']}")
 except Exception as e:
     check("www host certificate", False, f"{type(e).__name__}: {e}")
 
