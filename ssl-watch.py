@@ -191,8 +191,15 @@ def main():
     lines.append("NEEDS ATTENTION" if attention else "ALL GREEN")
 
     report = "\n".join(lines) + "\n"
-    OUT_TXT.write_text(report, encoding="utf-8")
-    OUT_JSON.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    try:
+        OUT_TXT.write_text(report, encoding="utf-8")
+        OUT_JSON.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    except OSError as exc:
+        # The scheduled run must report, not traceback: a read-only or locked
+        # directory is exactly the failure nobody is watching for.
+        print(report)
+        print(f"report write failed: {type(exc).__name__}: {exc}")
+        return 1
     print(report)
     return 0 if not attention else 1
 
