@@ -45,11 +45,25 @@ def doh(name, rtype):
     return [a["data"] for a in d.get("Answer", []) if a.get("type") == {"A": 1, "AAAA": 28}.get(rtype)]
 
 
+HOPS = []
+
+
 def fetch(url, timeout=20, follow=True):
-    """Return (status, body, headers, final_url) — final_url is where the chain ended."""
+    """Return (status, body, headers, final_url) — final_url is where the chain ended.
+
+    HOPS records every redirect target that was followed, so a downgrade hop
+    cannot hide behind an https:// destination.
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "motionstoodio-ssl-check"})
     if follow:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        class Recorder(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                HOPS.append(newurl)
+                return super().redirect_request(req, fp, code, msg, hdrs, newurl)
+
+        HOPS.clear()
+        opener = urllib.request.build_opener(Recorder)
+        with opener.open(req, timeout=timeout) as r:
             return r.status, r.read(), dict(r.headers), r.geturl()
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -110,6 +124,18 @@ try:
 except Exception as e:
     check("http reachable", False, f"{type(e).__name__}: {e}")
 
+try:
+    s3, _, h3, _ = fetch(f"http://{WWW}/?cb=sslcheck", follow=False)
+    loc3 = header(h3, "Location") or ""
+    host3 = urllib.parse.urlsplit(loc3).hostname if loc3 else None
+    # www is a host of its own: plaintext served there is a real gap even when
+    # the apex upgrades correctly.
+    check("www upgrades to https",
+          s3 in (301, 302, 307, 308) and loc3.startswith("https://") and host3 in (DOMAIN, WWW),
+          f"{s3} {loc3}" if loc3 else str(s3))
+except Exception as e:
+    check("www upgrades to https", False, f"{type(e).__name__}: {e}")
+
 print("\nTLS")
 try:
     ctx = ssl.create_default_context()
@@ -146,7 +172,9 @@ print("\nHTTPS")
 try:
     status, body, headers, final = fetch(f"https://{DOMAIN}/?cb=sslcheck")
     check("https 200", status == 200, str(status))
-    check("https stays encrypted", final.startswith("https://"), final)
+    check("https stays encrypted",
+          final.startswith("https://") and all(h.startswith("https://") for h in HOPS),
+          final if not HOPS else f"{final} via {', '.join(HOPS)}")
     if MARKER is None:
         print(f"  INFO  no page marker for {DOMAIN} — content not checked")
     else:
