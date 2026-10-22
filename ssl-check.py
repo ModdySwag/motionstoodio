@@ -12,6 +12,7 @@ import json
 import socket
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -21,8 +22,9 @@ MARKERS = {
     "motionstoodio.com": "Windows that move like they weigh something.",
     "moddys.net": "SPRAY IT LOUD",
 }
-MARKER = MARKERS.get(DOMAIN, DOMAIN)
-PAGE_MARKER_ALT = DOMAIN
+# None means this domain has no marker yet: the page checks say so instead of
+# passing on any text that happens to contain the domain name.
+MARKER = MARKERS.get(DOMAIN)
 
 results = []
 
@@ -91,14 +93,16 @@ print("\nHTTP")
 try:
     status, body, headers, _ = fetch(f"http://{DOMAIN}/?cb=sslcheck", follow=False)
     text = body.decode("utf-8", "replace")
-    ours = MARKER in text or ("motionstoodio" in text and "Diese Domain" not in text)
     loc = header(headers, "Location") or ""
     check("http answers", status in (200, 301, 302, 307, 308), str(status))
     check("redirects to https", status in (301, 302, 307, 308) and loc.startswith("https://"),
           loc or "no redirect")
     if status == 200:
-        check("serves the page", ours,
-              "our page" if ours else "PARKING PAGE — domain not bound to the webspace")
+        if MARKER is None:
+            print(f"  INFO  no page marker for {DOMAIN} — content not checked")
+        else:
+            check("serves the page", MARKER in text,
+                  "our page" if MARKER in text else "PARKING PAGE — domain not bound to the webspace")
 except Exception as e:
     check("http reachable", False, f"{type(e).__name__}: {e}")
 
@@ -113,13 +117,14 @@ try:
     subj = dict(x[0] for x in cert["subject"])
     issuer = dict(x[0] for x in cert["issuer"])
     sans = [v for k, v in cert.get("subjectAltName", [])]
-    check("handshake", True, f"{proto} {cipher}")
+    check("handshake", True, f"{proto} {cipher} (chain verified by the default context)")
     org = issuer.get("organizationName", "")
     print(f"  INFO  issuer: {org} / {issuer.get('commonName')}")
     check("covers apex", DOMAIN in sans or subj.get("commonName") == DOMAIN, ", ".join(sans[:6]))
-    check("not expired", ssl.cert_time_to_seconds(cert["notAfter"]) > __import__("time").time(),
+    check("not expired", ssl.cert_time_to_seconds(cert["notAfter"]) > time.time(),
           f"until {cert['notAfter']}")
-    check("browser-trusted chain", True, "verified by default context")
+    check("already valid", ssl.cert_time_to_seconds(cert["notBefore"]) <= time.time(),
+          f"from {cert['notBefore']}")
 except Exception as e:
     check("handshake", False, f"{type(e).__name__}: {e}")
 
@@ -138,19 +143,22 @@ try:
     status, body, headers, final = fetch(f"https://{DOMAIN}/?cb=sslcheck")
     check("https 200", status == 200, str(status))
     check("https stays encrypted", final.startswith("https://"), final)
-    check("serves the page", MARKER in body.decode("utf-8", "replace"), f"marker {MARKER!r}")
+    if MARKER is None:
+        print(f"  INFO  no page marker for {DOMAIN} — content not checked")
+    else:
+        check("serves the page", MARKER in body.decode("utf-8", "replace"), f"marker {MARKER!r}")
     hsts = header(headers, "Strict-Transport-Security")
     print(f"  INFO  HSTS{' set: ' + hsts if hsts else ' not sent'}")
 except Exception as e:
     check("https reachable", False, f"{type(e).__name__}: {e}")
 
-www_status = None
 try:
     s2, b2, _, final2 = fetch(f"https://{WWW}/?cb=sslcheck")
-    www_status = s2
+    page_ok = True if MARKER is None else MARKER in b2.decode("utf-8", "replace")
+    if MARKER is None:
+        print(f"  INFO  no page marker for {WWW} — content not checked")
     check("www serves (redirect or page)",
-          s2 in (200, 301, 302) and final2.startswith("https://")
-          and MARKER in b2.decode("utf-8", "replace"), f"{s2} {final2}")
+          s2 in (200, 301, 302) and final2.startswith("https://") and page_ok, f"{s2} {final2}")
 except Exception as e:
     check("www serves (redirect or page)", False, f"{type(e).__name__}: {e}")
 

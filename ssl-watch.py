@@ -12,6 +12,7 @@ anything needs attention — a failed check or a renewal that is nearly due.
 """
 import datetime
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -26,7 +27,10 @@ DOMAINS = ["motionstoodio.com", "moddys.net"]
 CHECK = SITE / "ssl-check.py"
 
 # Discord: reuse the running Hermes bot (Modbot, deepseek profile) — no second token.
-ENV = pathlib.Path(r"C:/Users/Moddy/AppData/Local/hermes/profiles/deepseek/.env")
+# Override with HERMES_ENV if the profile moves; a missing file is reported as a
+# failure, never as a quiet skip.
+ENV = pathlib.Path(os.environ.get(
+    "HERMES_ENV", r"C:/Users/Moddy/AppData/Local/hermes/profiles/deepseek/.env"))
 API = "https://discord.com/api/v10"
 
 
@@ -123,6 +127,12 @@ def main():
         ok_all = ok_all and ok
         dated = [(e, days_left(e)) for e in cert_expiries(text)]
         dated = [(e, d) for e, d in dated if d is not None]
+        if not dated:
+            # A checker that printed no certificate date has proved nothing about
+            # the certificate. Report attention, never a silent green.
+            ok = False
+            ok_all = False
+            blocking = blocking + ["no certificate date in checker output"]
         days = min((d for _, d in dated), default=None)
         expiry = min(dated, key=lambda pair: pair[1])[0] if dated else None
         issuer = None
@@ -157,17 +167,24 @@ def main():
         s["days_left"] is not None and s["days_left"] < 21 for s in summary["sites"].values()
     )
     attention = (not ok_all) or renewal_due
-    lines.append("NEEDS ATTENTION" if attention else "ALL GREEN")
 
     # Notify Discord when something needs a human (never a daily green ping unless asked).
     wants = {"--test", "--always"} & set(sys.argv[1:])
     if wants or attention:
         token, channel = discord_targets()
         if not token or not channel:
-            lines.append("discord: skipped (DISCORD_BOT_TOKEN / DISCORD_HOME_CHANNEL missing)")
+            # A watch that cannot reach anyone is broken, not green.
+            lines.append("discord: FAILED — DISCORD_BOT_TOKEN / DISCORD_HOME_CHANNEL missing")
+            attention = True
         else:
             sent = post_discord(token, channel, discord_message(summary, attention))
-            lines.append(f"discord: message {sent}")
+            if str(sent).isdigit():
+                lines.append(f"discord: message {sent}")
+            else:
+                lines.append(f"discord: FAILED ({sent})")
+                attention = True
+
+    lines.append("NEEDS ATTENTION" if attention else "ALL GREEN")
 
     report = "\n".join(lines) + "\n"
     OUT_TXT.write_text(report, encoding="utf-8")
