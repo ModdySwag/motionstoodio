@@ -107,6 +107,7 @@ def main():
     stamp = datetime.datetime.now().astimezone()
     lines = [f"SSL watch — {stamp:%Y-%m-%d %H:%M %Z}", ""]
     summary = {"checked_at": stamp.isoformat(timespec="seconds"), "sites": {}}
+    wants = {"--test", "--always"} & set(sys.argv[1:])
     ok_all = True
 
     for domain in DOMAINS:
@@ -166,24 +167,27 @@ def main():
     renewal_due = any(
         s["days_left"] is not None and s["days_left"] < 21 for s in summary["sites"].values()
     )
-    attention = (not ok_all) or renewal_due
+    token, channel = discord_targets()
+    notify_ready = bool(token and channel)
+    # Checked on every run, not only when an alert fires: a watch that cannot
+    # reach anyone is broken, not green.
+    attention = (not ok_all) or renewal_due or not notify_ready
+    notify = {"sent": False, "error": None}
 
-    # Notify Discord when something needs a human (never a daily green ping unless asked).
-    wants = {"--test", "--always"} & set(sys.argv[1:])
-    if wants or attention:
-        token, channel = discord_targets()
-        if not token or not channel:
-            # A watch that cannot reach anyone is broken, not green.
-            lines.append("discord: FAILED — DISCORD_BOT_TOKEN / DISCORD_HOME_CHANNEL missing")
-            attention = True
+    if not notify_ready:
+        notify["error"] = "DISCORD_BOT_TOKEN / DISCORD_HOME_CHANNEL missing"
+        lines.append("discord: FAILED — " + notify["error"])
+    elif wants or attention:
+        sent = post_discord(token, channel, discord_message(summary, attention))
+        if str(sent).isdigit():
+            notify["sent"] = True
+            lines.append(f"discord: message {sent}")
         else:
-            sent = post_discord(token, channel, discord_message(summary, attention))
-            if str(sent).isdigit():
-                lines.append(f"discord: message {sent}")
-            else:
-                lines.append(f"discord: FAILED ({sent})")
-                attention = True
+            notify["error"] = str(sent)
+            lines.append(f"discord: FAILED ({sent})")
+            attention = True
 
+    summary["notify"] = notify
     lines.append("NEEDS ATTENTION" if attention else "ALL GREEN")
 
     report = "\n".join(lines) + "\n"

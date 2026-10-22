@@ -14,6 +14,7 @@ import ssl
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DOMAIN = sys.argv[1] if len(sys.argv) > 1 else "motionstoodio.com"
@@ -94,8 +95,11 @@ try:
     status, body, headers, _ = fetch(f"http://{DOMAIN}/?cb=sslcheck", follow=False)
     text = body.decode("utf-8", "replace")
     loc = header(headers, "Location") or ""
+    loc_host = urllib.parse.urlsplit(loc).hostname if loc else None
     check("http answers", status in (200, 301, 302, 307, 308), str(status))
-    check("redirects to https", status in (301, 302, 307, 308) and loc.startswith("https://"),
+    # An https redirect to somebody else's host is not our redirect.
+    check("redirects to https",
+          status in (301, 302, 307, 308) and loc.startswith("https://") and loc_host in (DOMAIN, WWW),
           loc or "no redirect")
     if status == 200:
         if MARKER is None:
