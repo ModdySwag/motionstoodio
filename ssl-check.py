@@ -147,7 +147,8 @@ try:
     subj = dict(x[0] for x in cert["subject"])
     issuer = dict(x[0] for x in cert["issuer"])
     sans = [v for k, v in cert.get("subjectAltName", [])]
-    check("handshake", True, f"{proto} {cipher} (chain verified by the default context)")
+    check("handshake", cert is not None and bool(proto),
+          f"{proto} {cipher} (chain verified by the default context)")
     org = issuer.get("organizationName", "")
     print(f"  INFO  issuer: {org} / {issuer.get('commonName')}")
     check("covers apex", DOMAIN in sans or subj.get("commonName") == DOMAIN, ", ".join(sans[:6]))
